@@ -1,0 +1,5 @@
+# DMS 自动备份
+config.kdl.dmsbackup*
+
+# 旧手动备份
+config.kdl.backup*

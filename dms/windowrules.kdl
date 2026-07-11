@@ -1,0 +1,11 @@
+// DMS Window Rules - Managed by DankMaterialShell
+// Do not edit manually - changes may be overwritten
+
+// @id=dms_rule_0 @name=Alacritty
+window-rule {
+    match app-id="^Alacritty$"
+    draw-border-with-background false
+    background-effect {
+        blur true
+    }
+}
