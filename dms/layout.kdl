@@ -21,3 +21,11 @@ window-rule {
     tiled-state true
     draw-border-with-background false
 }
+
+layer-rule {
+    background-effect {
+        xray false
+    }
+}
+
+// bar-xray off
