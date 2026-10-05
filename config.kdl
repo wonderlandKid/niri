@@ -120,15 +120,21 @@ workspace "2"
 workspace "3"
 workspace "4"
 
-// 工作区 4 的 3 个终端依赖 foot server,先起 server 再开终端
-spawn-at-startup "foot" "--server"
-spawn-at-startup "linuxqq"
-spawn-at-startup "/opt/clash-for-windows-bin/cfw"
-// 3 个终端:先聚焦工作区 4 再逐个打开(最小列宽 1/3,见下方 foot 规则)
-// footclient 失败(server 未就绪)时重试并重新聚焦
-spawn-sh-at-startup r#"sh -c 'niri msg action focus-workspace "4"; until footclient; do sleep 0.5; niri msg action focus-workspace "4"; done'"#
-spawn-sh-at-startup r#"sh -c 'niri msg action focus-workspace "4"; until footclient; do sleep 0.5; niri msg action focus-workspace "4"; done'"#
-spawn-sh-at-startup r#"sh -c 'niri msg action focus-workspace "4"; until footclient; do sleep 0.5; niri msg action focus-workspace "4"; done'"#
+// 工作区 4 的 3 个窄终端:foot server 由 systemd socket 激活提供,不再在这里手动起,
+// 依赖 foot-server.socket(已启用:systemctl --user enable --now foot-server.socket,
+// 监听 $XDG_RUNTIME_DIR/foot.sock,footclient 连接时按需拉起 server,server 被杀也能自愈)。
+// 这里先等 socket 就绪(限时约 10s),再聚焦工作区 4、依次开 3 个 footclient
+// (带专用 app-id,每个只开一次,无重开循环);
+// 紧急恢复:若 socket 一直不就绪,可手动执行 niri msg action spawn -- foot --server
+// QQ 登录后延迟 3 秒启动(会话刚建立时立即拉起会因 dbus/服务未就绪而静默退出)
+spawn-sh-at-startup r#"sh -c 'sleep 3; linuxqq'"#
+// CFW 是 Electron 11(仅 X11)。2026-10-03 曾出现:开机自启动的主进程存活但卡死空转,
+// 渲染进程一直没起 → 窗口/核心都没了,代理端口不监听;且 CFW 单实例,手动再开只会把
+// 请求转发给僵死实例,表现为"怎么开都失败"。处置:先等 XWayland socket 就绪(限时 10s)
+// 再启动;10s 后仍无渲染进程则判定主进程僵死,强杀后重开一次。
+// 紧急恢复:pkill -9 -f '^/opt/clash-for-windows-bin/cfw' 后重新打开即可。
+spawn-sh-at-startup r#"sh -c 'i=0; while [ ! -S /tmp/.X11-unix/X0 ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done; /opt/clash-for-windows-bin/cfw & sleep 10; if ! pgrep -f "^/opt/clash-for-windows-bin/cfw .*--type=renderer" >/dev/null; then pkill -9 -f "^/opt/clash-for-windows-bin/cfw"; sleep 1; exec /opt/clash-for-windows-bin/cfw; fi'"#
+spawn-sh-at-startup r#"sh -c 'i=0; while [ ! -S "${XDG_RUNTIME_DIR}/foot.sock" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done; niri msg action focus-workspace "4"; footclient -a foot-startup & sleep 0.3; footclient -a foot-startup & sleep 0.3; footclient -a foot-startup &'"#
 
 // Startup apps are placed on their dedicated workspaces.
 // QQ and clash always open there; the 3 foot terminals are spawned
@@ -142,10 +148,10 @@ window-rule {
     match app-id=r#"(?i)^(cfw|clash)"#
     open-on-workspace "3"
 }
-// Only startup foot terminals go to workspace 4 at minimum column width (1/3).
-// Later windows (e.g. Mod+T) are unaffected.
+// 启动终端使用专用 app-id "foot-startup"(foot server 模式下客户端 -a 参数生效),
+// 固定落在工作区 4、1/3 最小预设列宽;Mod+T 的普通 footclient 不受影响。
 window-rule {
-    match at-startup=true app-id=r#"^foot$"#
+    match app-id=r#"^foot-startup$"#
     open-on-workspace "4"
     default-column-width { proportion 0.33333; }
 }
@@ -297,6 +303,8 @@ binds {
 
     // Suggested binds for running programs: terminal, app launcher, screen locker.
     Mod+T hotkey-overlay-title="Open a Terminal: foot" { spawn "footclient"; }
+    /-Mod+D hotkey-overlay-title="App Launcher: rofi (toggle)" { spawn-sh "pkill -x rofi || rofi -show drun"; }
+    Mod+D hotkey-overlay-title="Spotlight Bar: Toggle" { spawn "dms" "ipc" "call" "spotlight-bar" "toggle"; }
     Super+Alt+L hotkey-overlay-title="Lock the Screen: dms lock" { spawn-sh "dms ipc call lock lock"; }
 
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.
@@ -533,7 +541,8 @@ binds {
     Print { screenshot; }
     Ctrl+Print { screenshot-screen; }
     Alt+Print { screenshot-window; }
-    Ctrl+Alt+A { spawn-sh "grim -c -t ppm - | satty --filename - --output-filename ~/Pictures/Screenshots/satty-$(date '+%Y%m%d-%H%M%S').png"; }
+    // 截图统一用 niri 自带截图 UI(可框选区域,存文件或复制剪贴板)
+    Ctrl+Alt+A { screenshot; }
 
     // Applications such as remote-desktop clients and software KVM switches may
     // request that niri stops processing the keyboard shortcuts defined here

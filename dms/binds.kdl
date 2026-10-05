@@ -1,3 +1,5 @@
 binds {
-    Mod+D hotkey-overlay-title="Spotlight Bar: Toggle" { spawn "dms" "ipc" "call" "spotlight-bar" "toggle"; }
+    // Mod+D 启动器已迁移到 config.kdl(打开 rofi -show drun)。
+    // 若 DMS 重新生成本文件把下行加回来,与 config.kdl 的 Mod+D 冲突时,把下行删掉即可。
+    // Mod+D hotkey-overlay-title="Spotlight Bar: Toggle" { spawn "dms" "ipc" "call" "spotlight-bar" "toggle"; }
 }
